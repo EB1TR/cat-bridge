@@ -30,7 +30,9 @@ except Exception as e:
 
 try:
     sera = serial.Serial(port=RX_PORT)
+    print(f'Configurando puerto RX: {RX_PORT}')
     sera.baudrate = RX_BAUD
+    print(f'Configurando velocidad RX: {RX_BAUD}')
     sera.bytesize = serial.EIGHTBITS
     sera.parity = serial.PARITY_NONE
     sera.stopbits = serial.STOPBITS_TWO
@@ -41,7 +43,9 @@ try:
     sera.rtscts = False
     sera.dsrdtr = False
     serb = serial.Serial(port=TX_PORT)
+    print(f'Configurando puerto TX: {TX_PORT}')
     serb.baudrate = TX_BAUD
+    print(f'Configurando velocidad RX: {TX_BAUD}')
     serb.bytesize = serial.EIGHTBITS
     serb.parity = serial.PARITY_NONE
     serb.stopbits = serial.STOPBITS_TWO
@@ -61,6 +65,7 @@ if MQ_DATA:
     try:
         client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         client.connect_async(MQ_HOST, port=MQ_PORT, keepalive=60, bind_address="")
+        print(f'Conectado al servidor MQTT: {MQ_HOST} | {MQ_PORT} | {MQ_TOPIC}')
         client.loop_start()
     except Exception as e:
         print("No es posible abrir la conexión MQTT")
@@ -78,6 +83,9 @@ fa_expire_time = EX_DATA
 
 print(f'Intervalo entre envíos: {int(fa_send_interval_time*1000)} milisegundos')
 print(f'Tiempo de expiración de frecuencia: {int(fa_expire_time*1000)} milisegundos')
+print(f'Tiempo de expiración de frecuencia: {int(fa_expire_time*1000)} milisegundos')
+time.sleep(3)
+
 
 while True:
     try:
@@ -96,7 +104,8 @@ while True:
                 qrg_data = re.findall(r'(\d{11})|\d{11}.*', data_a)[0]
                 amp_data = "FA%s;" % qrg_data
                 fa_time = time.time()
-                msg = "Sniffed DATA"
+                msg = "Sniffed"
+                print("RX | Sniffing | %s | %s" % (int(fa_last_send_time), amp_data))
                 if MQ_DATA:
                     client.publish("eb1tr/k3/raw_if", data_a)
 
@@ -110,13 +119,14 @@ while True:
                 if bool(re.search(r'IF\d{11}.*;', data_a)):
                     amp_data = "FA%s;" % re.findall(r'(\d{11})', data_a)[0]
                     fa_time = time.time()
-                    msg = "Polled DATA "
+                    msg = "Polled "
+                    print("RX | Polling  | %s | %s" % (int(fa_last_send_time), amp_data))
 
             serb.write(amp_data.encode('utf-8'))
             fa_last_send_time = time.time()
             if MQ_DATA:
                 client.publish(f'{MQ_TOPIC}/raw_if', amp_data)
 
-            print("%s | %s | %s" % (msg, int(fa_last_send_time), amp_data))
+            print("TX | %s  | %s | %s" % (msg, int(fa_last_send_time), amp_data))
     except Exception as e:
         print(e)
