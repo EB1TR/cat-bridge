@@ -1,9 +1,18 @@
-import serial
-import paho.mqtt.client as mqtt
+# Librería estándar ----------------------------------------------------------------------------------------------------
+#
 import time
 import re
 import json
 import sys
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+# Librerías PIP --------------------------------------------------------------------------------------------------------
+#
+import serial
+import paho.mqtt.client as mqtt
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 # Abrir e importar configuración ---------------------------------------------------------------------------------------
 #
@@ -27,6 +36,8 @@ except Exception as e:
     input("Presione ENTER para salir...")
     sys.exit(0)
 # ----------------------------------------------------------------------------------------------------------------------
+
+print(f'Iniciando CAT-Bridge V20240828.21 by EB1TR')
 
 try:
     sera = serial.Serial(port=RX_PORT)
@@ -83,17 +94,16 @@ fa_expire_time = EX_DATA
 
 print(f'Intervalo entre envíos: {int(fa_send_interval_time*1000)} milisegundos')
 print(f'Tiempo de expiración de frecuencia: {int(fa_expire_time*1000)} milisegundos')
-print(f'Tiempo de expiración de frecuencia: {int(fa_expire_time*1000)} milisegundos')
 time.sleep(3)
-
 
 while True:
     try:
-        # Determine if the program need send or send and poll data
+        # Calculamos si es necesario volver a enviar un dato o es necesario actualizarlo previamente
         fa_send = fa_last_send_time + fa_send_interval_time <= time.time()
         fa_expired = fa_time + fa_expire_time <= time.time()
         # Sniffer of the PC<->Rig
         time.sleep(0.01)
+        # Recepción de nuevos paquetes
         if sera.inWaiting() > 0:
             data_a = sera.read_until(b';')
             data_a = data_a.decode('utf-8')
@@ -105,28 +115,30 @@ while True:
                 amp_data = "FA%s;" % qrg_data
                 fa_time = time.time()
                 msg = "Sniffed"
-                print("RX | Sniffing | %s | %s" % (int(fa_last_send_time), amp_data))
+                print("RXA | Sniffing | %s | %s" % (int(fa_last_send_time), amp_data))
                 if MQ_DATA:
                     client.publish("eb1tr/k3/raw_if", data_a)
 
-        # Send stored data or poll, if is necessary
+        # Enviamos datos que si es necesario enviar
         if fa_send:
-            # If
+            # Si los datos existentes han caducado se solicitan nuevos
             if fa_expired:
                 sera.write(b'IF;')
                 data_a = sera.read_until(b';')
                 data_a = data_a.decode('utf-8')
+                # Comprobación de datos válidos para no procesar paquetes no solicitados
                 if bool(re.search(r'IF\d{11}.*;', data_a)):
                     amp_data = "FA%s;" % re.findall(r'(\d{11})', data_a)[0]
                     fa_time = time.time()
                     msg = "Polled "
-                    print("RX | Polling  | %s | %s" % (int(fa_last_send_time), amp_data))
-
+                    print("TXA | Polling  | %s | %s" % (int(fa_last_send_time), amp_data))
+            # Enviamos los datos al puerto serie
             serb.write(amp_data.encode('utf-8'))
             fa_last_send_time = time.time()
+            # Publicamos también en MQTT
             if MQ_DATA:
                 client.publish(f'{MQ_TOPIC}/raw_if', amp_data)
 
-            print("TX | %s  | %s | %s" % (msg, int(fa_last_send_time), amp_data))
+            print("TXB | %s  | %s | %s" % (msg, int(fa_last_send_time), amp_data))
     except Exception as e:
         print(e)
