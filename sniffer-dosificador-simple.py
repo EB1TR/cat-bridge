@@ -131,7 +131,9 @@ while True:
                     amp_data = "FA%s;" % re.findall(r'(\d{11})', data_a)[0]
                     fa_time = time.time()
                     msg = "Polled "
+                    print("-" * 44)
                     print("TXA | Polling  | %s | %s" % (int(fa_last_send_time), amp_data))
+                    print("-" * 44)
             # Enviamos los datos al puerto serie
             serb.write(amp_data.encode('utf-8'))
             fa_last_send_time = time.time()
