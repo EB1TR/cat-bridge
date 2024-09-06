@@ -37,7 +37,7 @@ except Exception as e:
     sys.exit(0)
 # ----------------------------------------------------------------------------------------------------------------------
 
-print(f'Iniciando CAT-Bridge V20240828.21 by EB1TR')
+print(f'Iniciando CAT-Bridge V20240906.20 by EB1TR')
 
 try:
     sera = serial.Serial(port=RX_PORT)
@@ -53,6 +53,7 @@ try:
     sera.dtr = False
     sera.rtscts = False
     sera.dsrdtr = False
+    sera.timeout = 1
     serb = serial.Serial(port=TX_PORT)
     print(f'Configurando puerto TX: {TX_PORT}')
     serb.baudrate = TX_BAUD
