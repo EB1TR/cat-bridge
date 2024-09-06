@@ -77,7 +77,7 @@ if MQ_DATA:
     try:
         client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         client.connect_async(MQ_HOST, port=MQ_PORT, keepalive=60, bind_address="")
-        print(f'Conectado al servidor MQTT: {MQ_HOST} | {MQ_PORT} | {MQ_TOPIC}')
+        print(f'Conectado al servidor MQTT - Host: {MQ_HOST} | Puerto: {MQ_PORT} | Topic: {MQ_TOPIC}')
         client.loop_start()
     except Exception as e:
         print("No es posible abrir la conexión MQTT")
