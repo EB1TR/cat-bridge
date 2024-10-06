@@ -4,6 +4,7 @@ import time
 import re
 import json
 import sys
+import datetime
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -37,13 +38,13 @@ except Exception as e:
     sys.exit(0)
 # ----------------------------------------------------------------------------------------------------------------------
 
-print(f'Iniciando CAT-Bridge V20240906.20 by EB1TR')
+print(f'Iniciando CAT-Bridge V20241006 by EB1TR')
 
 try:
     sera = serial.Serial(port=RX_PORT)
-    print(f'Configurando puerto RX: {RX_PORT}')
+    print(f'Configurando puerto TX/RX del TRX: {RX_PORT}')
     sera.baudrate = RX_BAUD
-    print(f'Configurando velocidad RX: {RX_BAUD}')
+    print(f'Configurando velocidad TX/RX del TRX: {RX_BAUD}')
     sera.bytesize = serial.EIGHTBITS
     sera.parity = serial.PARITY_NONE
     sera.stopbits = serial.STOPBITS_TWO
@@ -55,9 +56,9 @@ try:
     sera.dsrdtr = False
     sera.timeout = 1
     serb = serial.Serial(port=TX_PORT)
-    print(f'Configurando puerto TX: {TX_PORT}')
+    print(f'Configurando puerto TX del PA: {TX_PORT}')
     serb.baudrate = TX_BAUD
-    print(f'Configurando velocidad RX: {TX_BAUD}')
+    print(f'Configurando velocidad TX del PA: {TX_BAUD}')
     serb.bytesize = serial.EIGHTBITS
     serb.parity = serial.PARITY_NONE
     serb.stopbits = serial.STOPBITS_TWO
@@ -75,15 +76,20 @@ except Exception as e:
 
 if MQ_DATA:
     try:
+        print(f'Broker MQTT: Activado')
         client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         client.connect_async(MQ_HOST, port=MQ_PORT, keepalive=60, bind_address="")
-        print(f'Conectado al servidor MQTT - Host: {MQ_HOST} | Puerto: {MQ_PORT} | Topic: {MQ_TOPIC}')
+        print(f'Broker MQTT (host): {MQ_HOST}')
+        print(f'Broker MQTT (puerto): {MQ_PORT}')
+        print(f'Broker MQTT (topic): {MQ_TOPIC}')
         client.loop_start()
     except Exception as e:
         print("No es posible abrir la conexión MQTT")
         print(e)
         input("Presione ENTER para salir...")
         sys.exit(0)
+else:
+    print(f'Broker MQTT - Host: Desactivado')
 
 msg = ""
 data_a = ""
@@ -97,6 +103,15 @@ print(f'Intervalo entre envíos: {int(fa_send_interval_time*1000)} milisegundos'
 print(f'Tiempo de expiración de frecuencia: {int(fa_expire_time*1000)} milisegundos')
 time.sleep(3)
 
+
+def to_ts(ts_epoch):
+    try:
+        ts = datetime.datetime.fromtimestamp(ts_epoch).strftime('%H:%M:%S')
+        return ts
+    except:
+        return 'no time'
+
+
 while True:
     try:
         # Calculamos si es necesario volver a enviar un dato o es necesario actualizarlo previamente
@@ -105,7 +120,7 @@ while True:
         # Sniffer of the PC<->Rig
         time.sleep(0.01)
         # Recepción de nuevos paquetes
-        if sera.inWaiting() > 0:
+        if sera.inWaiting() > 2:
             data_a = sera.read_until(b';')
             data_a = data_a.decode('utf-8')
             # Comprobación de datos válidos
@@ -116,9 +131,9 @@ while True:
                 amp_data = "FA%s;" % qrg_data
                 fa_time = time.time()
                 msg = "Sniffed"
-                print("RXA | Sniffing | %s | %s" % (int(fa_last_send_time), amp_data))
+                print("RXA | Sniffing | %s | %s" % (to_ts(fa_last_send_time), amp_data))
                 if MQ_DATA:
-                    client.publish("eb1tr/k3/raw_if", data_a)
+                    client.publish(f'{MQ_TOPIC}/raw_if', amp_data)
 
         # Enviamos datos que si es necesario enviar
         if fa_send:
@@ -132,9 +147,9 @@ while True:
                     amp_data = "FA%s;" % re.findall(r'(\d{11})', data_a)[0]
                     fa_time = time.time()
                     msg = "Polled "
-                    print("-" * 44)
-                    print("TXA | Polling  | %s | %s" % (int(fa_last_send_time), amp_data))
-                    print("-" * 44)
+                    print("-" * 42)
+                    print("TXA | Polling  | %s | %s" % (to_ts(fa_last_send_time), amp_data))
+                    print("-" * 42)
             # Enviamos los datos al puerto serie
             serb.write(amp_data.encode('utf-8'))
             fa_last_send_time = time.time()
@@ -142,6 +157,6 @@ while True:
             if MQ_DATA:
                 client.publish(f'{MQ_TOPIC}/raw_if', amp_data)
 
-            print("TXB | %s  | %s | %s" % (msg, int(fa_last_send_time), amp_data))
+            print("TXB | %s  | %s | %s" % (msg, to_ts(fa_last_send_time), amp_data))
     except Exception as e:
         print(e)
