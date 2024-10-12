@@ -38,7 +38,7 @@ except Exception as e:
     sys.exit(0)
 # ----------------------------------------------------------------------------------------------------------------------
 
-print(f'Iniciando CAT-Bridge V20241006 by EB1TR')
+print(f'Iniciando CAT-Bridge V20241012 by EB1TR')
 
 try:
     sera = serial.Serial(port=RX_PORT)
@@ -83,6 +83,16 @@ if MQ_DATA:
         print(f'Broker MQTT (puerto): {MQ_PORT}')
         print(f'Broker MQTT (topic): {MQ_TOPIC}')
         client.loop_start()
+        time.sleep(0.3)
+        mqtt_nro = 1
+        while not client.is_connected():
+            print(f'Broker MQTT (estado): Desconectado (intento: {mqtt_nro})')
+            mqtt_nro += 1
+            if mqtt_nro > 5:
+                print("No es posible abrir la conexión MQTT")
+                input("Presione ENTER para salir...")
+                sys.exit(0)
+        print(f'Broker MQTT (estado): Conectado')
     except Exception as e:
         print("No es posible abrir la conexión MQTT")
         print(e)
@@ -139,11 +149,11 @@ while True:
         if fa_send:
             # Si los datos existentes han caducado se solicitan nuevos
             if fa_expired:
-                sera.write(b'IF;')
+                sera.write(b'FA;')
                 data_a = sera.read_until(b';')
                 data_a = data_a.decode('utf-8')
                 # Comprobación de datos válidos para no procesar paquetes no solicitados
-                if bool(re.search(r'IF\d{11}.*;', data_a)):
+                if bool(re.search(r'FA\d{11}.*;', data_a)):
                     amp_data = "FA%s;" % re.findall(r'(\d{11})', data_a)[0]
                     fa_time = time.time()
                     msg = "Polled "
@@ -151,12 +161,13 @@ while True:
                     print("TXA | Polling  | %s | %s" % (to_ts(fa_last_send_time), amp_data))
                     print("-" * 42)
             # Enviamos los datos al puerto serie
-            serb.write(amp_data.encode('utf-8'))
-            fa_last_send_time = time.time()
+            if bool(re.search(r'FA\d{11}.*;', amp_data)):
+                serb.write(amp_data.encode('utf-8'))
+                if MQ_DATA:
+                    client.publish(f'{MQ_TOPIC}/raw_if', amp_data)
+                print("TXB | %s  | %s | %s" % (msg, to_ts(fa_last_send_time), amp_data))
+                fa_last_send_time = time.time()
             # Publicamos también en MQTT
-            if MQ_DATA:
-                client.publish(f'{MQ_TOPIC}/raw_if', amp_data)
 
-            print("TXB | %s  | %s | %s" % (msg, to_ts(fa_last_send_time), amp_data))
     except Exception as e:
         print(e)
