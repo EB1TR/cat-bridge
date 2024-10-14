@@ -38,7 +38,7 @@ except Exception as e:
     sys.exit(0)
 # ----------------------------------------------------------------------------------------------------------------------
 
-print(f'Iniciando CAT-Bridge V20241012 by EB1TR')
+print(f'Iniciando CAT-Bridge V20241014 by EB1TR')
 
 try:
     sera = serial.Serial(port=RX_PORT)
@@ -161,7 +161,7 @@ while True:
                     print("TXA | Polling  | %s | %s" % (to_ts(fa_last_send_time), amp_data))
                     print("-" * 42)
             # Enviamos los datos al puerto serie
-            if bool(re.search(r'FA\d{11}.*;', amp_data)):
+            if bool(re.search(r'FA\d{11}.*;', amp_data)) and time.time() < fa_time + 60:
                 serb.write(amp_data.encode('utf-8'))
                 if MQ_DATA:
                     client.publish(f'{MQ_TOPIC}/raw_if', amp_data)
