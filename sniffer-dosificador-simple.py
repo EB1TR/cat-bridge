@@ -30,7 +30,7 @@ try:
     MQ_HOST = config["mq_host"]
     MQ_PORT = config["mq_port"]
     MQ_TOPIC = config["mq_topic"]
-
+    DEBUG = config["debug"]
 except Exception as e:
     print("No es posible abrir el fichero de configuración o el formato es incorrecto")
     print(e)
@@ -130,7 +130,7 @@ while True:
         # Sniffer of the PC<->Rig
         time.sleep(0.01)
         # Recepción de nuevos paquetes
-        if sera.inWaiting() > 2:
+        if sera.inWaiting() > 0:
             data_a = sera.read_until(b';')
             data_a = data_a.decode('utf-8')
             # Comprobación de datos válidos
@@ -141,7 +141,9 @@ while True:
                 amp_data = "FA%s;" % qrg_data
                 fa_time = time.time()
                 msg = "Sniffed"
-                print("RXA | Sniffing | %s | %s" % (to_ts(fa_last_send_time), amp_data))
+                if DEBUG > 0:
+                    print(f'RAW DATA SNIFFED: {data_a}')
+                print("RXA | %s | %s | %s" % (msg, to_ts(fa_last_send_time), amp_data))
                 if MQ_DATA:
                     client.publish(f'{MQ_TOPIC}/raw_if', amp_data)
 
@@ -150,22 +152,27 @@ while True:
             # Si los datos existentes han caducado se solicitan nuevos
             if fa_expired:
                 sera.write(b'FA;')
+                print("-" * 42)
+                print(f'TXA | Poll    | {to_ts(int(time.time()))} | Polling...')
+                print("-" * 42)
                 data_a = sera.read_until(b';')
                 data_a = data_a.decode('utf-8')
-                # Comprobación de datos válidos para no procesar paquetes no solicitados
-                if bool(re.search(r'FA\d{11}.*;', data_a)):
-                    amp_data = "FA%s;" % re.findall(r'(\d{11})', data_a)[0]
+                is_fa = bool(re.search(r'FA\d{11}.*;', data_a))
+                if is_fa:
+                    qrg_data = re.findall(r'(\d{11})', data_a)[0]
+                    amp_data = "FA%s;" % qrg_data
                     fa_time = time.time()
-                    msg = "Polled "
-                    print("-" * 42)
-                    print("TXA | Polling  | %s | %s" % (to_ts(fa_last_send_time), amp_data))
-                    print("-" * 42)
+                    msg = "Polled  "
+                    if DEBUG > 0:
+                        print(f'RAW DATA SNIFFED: {data_a}')
+                    print("RXA | Polled   | %s | %s" % (to_ts(fa_last_send_time), amp_data))
+
             # Enviamos los datos al puerto serie
-            if bool(re.search(r'FA\d{11}.*;', amp_data)) and time.time() < fa_time + 60:
+            if bool(re.search(r'FA\d{11}.*;', amp_data)):
                 serb.write(amp_data.encode('utf-8'))
                 if MQ_DATA:
                     client.publish(f'{MQ_TOPIC}/raw_if', amp_data)
-                print("TXB | %s  | %s | %s" % (msg, to_ts(fa_last_send_time), amp_data))
+                print("TXB | %s | %s | %s" % (msg, to_ts(fa_last_send_time), amp_data))
                 fa_last_send_time = time.time()
             # Publicamos también en MQTT
 
