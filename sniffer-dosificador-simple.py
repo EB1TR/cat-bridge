@@ -30,7 +30,6 @@ try:
     MQ_HOST = config["mq_host"]
     MQ_PORT = config["mq_port"]
     MQ_TOPIC = config["mq_topic"]
-    DEBUG = config["debug"]
     VERSION = "V20241206"
 except Exception as e:
     print("No es posible abrir el fichero de configuración o el formato es incorrecto")
@@ -134,7 +133,7 @@ def do_sniffer():
         fa_last_send_time = time.time()
         fa_send_interval_time = TX_TIME
         fa_expire_time = EX_DATA
-        requested = False
+        polled = False
         print(f'Intervalo entre envíos: {int(fa_send_interval_time * 1000)} milisegundos')
         print(f'Tiempo de expiración de frecuencia: {int(fa_expire_time * 1000)} milisegundos')
         time.sleep(1)
@@ -150,19 +149,20 @@ def do_sniffer():
             if sera.inWaiting() > 0:
                 data_a = sera.read_until(b';')
                 data_a = data_a.decode('utf-8')
+
                 # Comprobación de datos válidos
                 is_if = bool(re.search(r'IF\d{11}.*;', data_a))
                 is_fa = bool(re.search(r'FA\d{11}.*;', data_a))
+
+                # Si es un paquete válido lo procesamos
                 if is_if or is_fa:
                     qrg_data = re.findall(r'(\d{11})|\d{11}.*', data_a)[0]
                     amp_data = "FA%s;" % qrg_data
                     fa_time = time.time()
-                    if DEBUG > 0:
-                        print(f'RAW DATA SNIFFED: {data_a}')
-                    print("RXA | %s | %s" % (to_ts(fa_last_send_time), amp_data))
+                    print(f'RXA | {to_ts(fa_last_send_time)} | {amp_data}')
                     if MQ_DATA:
                         mqtt_client.publish(f'{MQ_TOPIC}/raw_if', amp_data)
-                    requested = False
+                    polled = False
 
             # Calculamos si es necesario volver a enviar un dato o es necesario actualizarlo previamente
             fa_send = fa_last_send_time + fa_send_interval_time <= time.time()
@@ -175,12 +175,12 @@ def do_sniffer():
                     serb.write(amp_data.encode('utf-8'))
                     if MQ_DATA:
                         mqtt_client.publish(f'{MQ_TOPIC}/raw_if', amp_data)
-                    print("TXB | %s | %s" % (to_ts(fa_last_send_time), amp_data))
+                    print(f'TXB | {to_ts(fa_last_send_time)} | {amp_data}')
                     fa_last_send_time = time.time()
-                elif not requested:
+                elif not polled:
                     sera.write(b'FA;')
-                    requested = True
-                    print(f'TXA | {to_ts(int(time.time()))} | Polling...')
+                    polled = True
+                    print(f'TXA | {to_ts(time.time())} | Polling...')
 
     except KeyboardInterrupt:
         print(f'\n** Salida por el usuario.')
